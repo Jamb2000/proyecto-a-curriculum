@@ -1,0 +1,207 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    overflow-x: hidden;
+}
+
+#hero {
+    height: 100vh;
+    background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    transition: background-color 1s ease;
+}
+
+#stars, #stars2, #stars3 {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-repeat: repeat;
+    background-size: 200px 200px;
+}
+
+#stars {
+    background-image: radial-gradient(2px 2px at 20px 30px, #eee, rgba(0, 0, 0, 0)),
+                      radial-gradient(2px 2px at 40px 70px, #fff, rgba(0, 0, 0, 0)),
+                      radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0, 0, 0, 0));
+    animation: fall 20s linear infinite;
+}
+
+#stars2 {
+    background-image: radial-gradient(2px 2px at 90px 40px, #fff, rgba(0, 0, 0, 0)),
+                      radial-gradient(2px 2px at 130px 80px, #fff, rgba(0, 0, 0, 0)),
+                      radial-gradient(2px 2px at 160px 120px, #ddd, rgba(0, 0, 0, 0));
+    animation: fall 30s linear infinite;
+}
+
+#stars3 {
+    background-image: radial-gradient(2px 2px at 60px 20px, #eee, rgba(0, 0, 0, 0)),
+                      radial-gradient(2px 2px at 100px 50px, #fff, rgba(0, 0, 0, 0)),
+                      radial-gradient(2px 2px at 140px 90px, #ddd, rgba(0, 0, 0, 0));
+    animation: fall 40s linear infinite;
+}
+
+@keyframes fall {
+    from {
+        transform: translateY(0);
+    }
+    to {
+        transform: translateY(100vh);
+    }
+}
+
+#welcome-text {
+    font-family: 'Arial', sans-serif;
+    font-size: 5rem;
+    color: #f5f5dc;
+    text-align: center;
+    text-shadow: 0 0 10px #f5f5dc, 0 0 20px #f5f5dc, 0 0 30px #f5f5dc;
+    z-index: 1;
+    animation: glow 2s ease-in-out infinite;
+}
+
+@keyframes glow {
+    0%, 100% {
+        text-shadow: 0 0 10px #f5f5dc, 0 0 20px #f5f5dc, 0 0 30px #f5f5dc;
+    }
+    50% {
+        text-shadow: 0 0 20px #f5f5dc, 0 0 30px #f5f5dc, 0 0 40px #f5f5dc;
+    }
+}
+
+.robot-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+}
+
+#robot {
+    position: relative;
+    width: 200px;
+    height: 300px;
+    margin-right: 20px;
+}
+
+#head {
+    width: 80px;
+    height: 80px;
+    background: radial-gradient(circle, #fff, #ccc);
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+    left: 60px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+#body {
+    width: 100px;
+    height: 150px;
+    position: absolute;
+    top: 80px;
+    left: 50px;
+}
+
+#torso {
+    width: 100px;
+    height: 150px;
+    background: linear-gradient(to bottom, #eee, #ccc);
+    border-radius: 10px;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.arm {
+    width: 20px;
+    height: 100px;
+    background: linear-gradient(to bottom, #eee, #ccc);
+    position: absolute;
+    top: 20px;
+    border-radius: 5px;
+}
+
+#arm-left {
+    left: -30px;
+    transform: rotate(20deg);
+}
+
+#arm-right {
+    right: -30px;
+    transform: rotate(-20deg);
+}
+
+.leg {
+    width: 20px;
+    height: 100px;
+    background: linear-gradient(to bottom, #eee, #ccc);
+    position: absolute;
+    top: 140px;
+    border-radius: 5px;
+}
+
+#leg-left {
+    left: 20px;
+}
+
+#leg-right {
+    right: 20px;
+}
+
+.eye {
+    width: 15px;
+    height: 15px;
+    background-color: #000;
+    border-radius: 50%;
+    position: absolute;
+    top: 35px;
+}
+
+#eye-left {
+    left: 20px;
+}
+
+#eye-right {
+    right: 20px;
+}
+
+#scroll-down {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 1s ease 3s; /* Fade in after 3s */
+    color: #f5f5dc;
+    font-size: 1.2rem;
+    z-index: 100;
+    text-shadow: 0 0 5px #000;
+}
+
+#about {
+    height: 100vh;
+    background-color: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#business-card {
+    width: 300px;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    cursor: move;
+    position: relative;
+}
+
+#business-card img {
+    width: 100%;
+    border-radius: 5px;
+}
