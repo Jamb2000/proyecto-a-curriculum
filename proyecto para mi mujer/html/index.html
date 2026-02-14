@@ -2,43 +2,61 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Para mi esposa - San Valentín</title>
     <style>
         /* --- ESTILOS (CSS) --- */
-        /* Esto reemplaza lo que pedías como C++, ya que CSS es el estándar para diseño web */
         body {
             margin: 0;
             padding: 0;
-            overflow: hidden; /* Evita barras de desplazamiento */
-            background-color: #000000; /* Fondo negro galáctico */
+            overflow: hidden;
+            background-color: #000000;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; /* Evita zoom en móviles */
         }
 
         canvas {
-            display: block; /* El lienzo ocupa todo el bloque */
+            display: block;
+            /* EFECTO CRÍTICO: Las estrellas aparecen suavemente, no de golpe */
+            animation: fadeIn 2s ease-in forwards;
+            opacity: 0;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
         }
 
         #ui-layer {
             position: absolute;
-            top: 50%;
+            top: 15%; 
             left: 50%;
-            transform: translate(-50%, -50%);
-            color: rgba(255, 255, 255, 0.8);
-            pointer-events: none; /* Permite que el click pase al canvas */
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.9);
+            pointer-events: none;
             text-align: center;
             font-size: 1.5rem;
             opacity: 1;
-            transition: opacity 1s ease;
+            transition: opacity 0.3s ease; 
             text-transform: uppercase;
             letter-spacing: 4px;
             animation: pulse 2s infinite;
+            z-index: 9999; 
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            width: 100%;
+        }
+
+        @media (max-width: 600px) {
+            #ui-layer {
+                font-size: 1.2rem;
+                top: 20%;
+                letter-spacing: 2px;
+            }
         }
 
         @keyframes pulse {
-            0% { opacity: 0.4; }
-            50% { opacity: 1; }
-            100% { opacity: 0.4; }
+            0% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+            50% { opacity: 1; transform: translateX(-50%) scale(1.05); }
+            100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
         }
 
         .hidden {
@@ -48,102 +66,197 @@
 </head>
 <body>
 
-    <!-- Capa de texto inicial -->
     <div id="ui-layer">Haz Clic en la pantalla</div>
-    
-    <!-- El Lienzo donde ocurre la magia -->
     <canvas id="galaxyCanvas"></canvas>
 
     <script>
-        /* --- LÓGICA (JAVASCRIPT) --- */
+        /* =============================================================================
+           --- ZONA DE CONFIGURACIÓN ---
+           ============================================================================= */
         
+        // Tiempos ajustados para que dé tiempo a leer cada frase larga
+        const FRASES_Y_TIEMPOS = [
+            { text: "Feliz Día", tiempo: 0 },
+            { text: "De San Valentín", tiempo: 4000 },
+            { text: "Mi Amor", tiempo: 8000 },
+            { text: "Fátima Suré", tiempo: 12000 },
+            { text: "Esta es mi manera", tiempo: 16000 },
+            { text: "De Expresar", tiempo: 20000 },
+            { text: "El intenso amor", tiempo: 24000 },
+            { text: "Que te tengo", tiempo: 28000 },
+            { text: "Te Amo", tiempo: 32000 },
+            { text: "Eres mi vida", tiempo: 36000 },
+            { action: "heart", tiempo: 40000 } 
+        ];
+
+        /* =============================================================================
+           --- LÓGICA ---
+           ============================================================================= */
+
         const canvas = document.getElementById('galaxyCanvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const uiLayer = document.getElementById('ui-layer');
 
         let width, height;
         let particles = [];
-        let mouse = { x: -9999, y: -9999 }; // Mouse fuera de pantalla inicialmente
-        let isSequenceRunning = false;
+        let mouse = { x: -9999, y: -9999 };
+        
+        let isSequenceRunning = false; 
+        let isHeartFormed = false;     
+        let activeTimeouts = [];       
+        let areButterfliesActive = false; 
+        
+        let currentState = { type: 'none', value: null };
+        let pulseScale = 1;
 
-        // Configuración de las estrellas
-        const PARTICLE_COUNT = 1800; // Cantidad de estrellas
-        const MOUSE_RADIUS = 100; // Radio de repulsión del mouse
-        const PARTICLE_COLOR = 'rgba(255, 255, 255, 0.9)';
-        const ACCENT_COLOR = 'rgba(255, 100, 150, 0.9)'; // Color rosado para el corazón
+        // Configuración adaptable (Móvil vs PC)
+        const isMobile = window.innerWidth < 768;
+        const PARTICLE_COUNT = isMobile ? 1800 : 3200; 
+        const MOUSE_RADIUS = isMobile ? 80 : 120;
+        
+        const PARTICLE_COLOR = 'rgba(255, 255, 255, 0.8)'; 
+        const ACCENT_COLOR = '#ff3366'; 
+        
+        const NUM_BUTTERFLIES = isMobile ? 12 : 25;
+        const PARTICLES_PER_BUTTERFLY = 15;
+        let butterflyEntities = [];
 
-        // Inicialización del tamaño del canvas
+        // Inicializamos ancho y alto ANTES de crear partículas
         function resize() {
             width = canvas.width = window.innerWidth;
             height = canvas.height = window.innerHeight;
+            
+            if (currentState.type === 'text') {
+                formText(currentState.value);
+            } else if (currentState.type === 'heart') {
+                formHeart();
+            }
         }
         window.addEventListener('resize', resize);
-        resize();
+        resize(); // Llamada inmediata crítica
 
-        // Clase Partícula (Estrella)
-        class Particle {
-            constructor() {
+        /* --- CLASE MARIPOSA --- */
+        class ButterflyEntity {
+            constructor(id) {
+                this.id = id;
                 this.x = Math.random() * width;
                 this.y = Math.random() * height;
-                this.vx = (Math.random() - 0.5) * 1.5; // Velocidad aleatoria
+                this.vx = (Math.random() - 0.5) * 4; 
+                this.vy = (Math.random() - 0.5) * 4;
+                this.flapSpeed = 0.2 + Math.random() * 0.1;
+                this.flapPhase = Math.random() * Math.PI;
+                this.hue = Math.random() * 360; 
+                this.hueSpeed = 0.5 + Math.random();
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.hue += this.hueSpeed;
+                if(this.hue > 360) this.hue = 0;
+
+                if (Math.random() < 0.05) {
+                    this.vx += (Math.random() - 0.5) * 1;
+                    this.vy += (Math.random() - 0.5) * 1;
+                }
+
+                // Límites suaves
+                const maxSpeed = 3;
+                this.vx = Math.max(Math.min(this.vx, maxSpeed), -maxSpeed);
+                this.vy = Math.max(Math.min(this.vy, maxSpeed), -maxSpeed);
+
+                const margin = 50;
+                if (this.x < margin) this.vx += 0.2;
+                if (this.x > width - margin) this.vx -= 0.2;
+                if (this.y < margin) this.vy += 0.2;
+                if (this.y > height - margin) this.vy -= 0.2;
+                
+                this.flapPhase += this.flapSpeed;
+            }
+        }
+
+        /* --- CLASE PARTÍCULA --- */
+        class Particle {
+            constructor(index) {
+                this.index = index;
+                // CORRECCIÓN: Distribución aleatoria total en la pantalla
+                this.x = Math.random() * width; 
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 1.5; 
                 this.vy = (Math.random() - 0.5) * 1.5;
                 this.size = Math.random() * 2 + 1;
                 this.baseX = this.x;
                 this.baseY = this.y;
-                this.targetX = null; // Destino cuando forma palabras
+                this.targetX = null;
                 this.targetY = null;
                 this.density = (Math.random() * 30) + 1;
                 this.color = PARTICLE_COLOR;
-                this.inShape = false; // ¿Es parte de una letra/forma?
+                this.inShape = false;
+                this.butterflyIndex = -1; 
+                this.butterflyOffset = { x: 0, y: 0 };
             }
 
             update() {
-                // Cálculo de distancia al mouse
+                if (areButterfliesActive && this.butterflyIndex !== -1) {
+                    const butterfly = butterflyEntities[this.butterflyIndex];
+                    const wingScale = Math.abs(Math.sin(butterfly.flapPhase));
+                    this.targetX = butterfly.x + (this.butterflyOffset.x * wingScale);
+                    this.targetY = butterfly.y + this.butterflyOffset.y;
+                    this.inShape = true;
+                    this.color = `hsla(${butterfly.hue}, 80%, 60%, 0.9)`; 
+                }
+
                 let dx = mouse.x - this.x;
                 let dy = mouse.y - this.y;
                 let distance = Math.sqrt(dx * dx + dy * dy);
-                let forceDirectionX = dx / distance;
-                let forceDirectionY = dy / distance;
-                
-                // Fuerza de repulsión (Mouse)
                 let maxDistance = MOUSE_RADIUS;
-                let force = (maxDistance - distance) / maxDistance;
-                let directionX = forceDirectionX * force * this.density;
-                let directionY = forceDirectionY * force * this.density;
 
                 if (distance < maxDistance) {
+                    let forceDirectionX = dx / distance;
+                    let forceDirectionY = dy / distance;
+                    let force = (maxDistance - distance) / maxDistance;
+                    let directionX = forceDirectionX * force * this.density;
+                    let directionY = forceDirectionY * force * this.density;
                     this.x -= directionX;
                     this.y -= directionY;
                 }
 
-                // Lógica de movimiento según estado
                 if (this.targetX !== null && this.targetY !== null) {
-                    // Modo: Formar palabra/corazón
-                    let tdx = this.targetX - this.x;
-                    let tdy = this.targetY - this.y;
+                    let effectiveTargetX = this.targetX;
+                    let effectiveTargetY = this.targetY;
+
+                    if (currentState.type === 'heart' && this.inShape && this.butterflyIndex === -1) {
+                        let centerX = width / 2;
+                        let centerY = height / 2;
+                        effectiveTargetX = centerX + (this.targetX - centerX) * pulseScale;
+                        effectiveTargetY = centerY + (this.targetY - centerY) * pulseScale;
+                    }
+
+                    let tdx = effectiveTargetX - this.x;
+                    let tdy = effectiveTargetY - this.y;
+                    let speedFactor = (areButterfliesActive && this.butterflyIndex !== -1) ? 0.2 : 0.15;
+
+                    this.x += tdx * speedFactor; 
+                    this.y += tdy * speedFactor;
                     
-                    // Moverse suavemente al destino (Easing)
-                    this.x += tdx * 0.1; 
-                    this.y += tdy * 0.1;
-                    
-                    // Un poco de vibración para que no se vea estático
                     if (Math.abs(tdx) < 1 && Math.abs(tdy) < 1) {
-                         this.x += (Math.random() - 0.5) * 0.5;
-                         this.y += (Math.random() - 0.5) * 0.5;
+                         if (!areButterfliesActive) {
+                             this.x = effectiveTargetX;
+                             this.y = effectiveTargetY;
+                         }
                     }
                 } else {
-                    // Modo: Galaxia libre
                     this.x += this.vx;
                     this.y += this.vy;
 
-                    // Rebote en los bordes
+                    // Rebote simple
                     if (this.x < 0 || this.x > width) this.vx = -this.vx;
                     if (this.y < 0 || this.y > height) this.vy = -this.vy;
                 }
             }
 
             draw() {
-                ctx.fillStyle = this.inShape ? ACCENT_COLOR : this.color;
+                ctx.fillStyle = this.inShape ? this.color : PARTICLE_COLOR;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.closePath();
@@ -151,18 +264,52 @@
             }
         }
 
-        // Crear partículas iniciales
         function initParticles() {
             particles = [];
             for (let i = 0; i < PARTICLE_COUNT; i++) {
-                particles.push(new Particle());
+                particles.push(new Particle(i));
+            }
+            butterflyEntities = [];
+            for(let i=0; i<NUM_BUTTERFLIES; i++) {
+                butterflyEntities.push(new ButterflyEntity(i));
             }
         }
 
-        // --- SISTEMA DE TEXTO A PUNTOS ---
-        // Dibuja texto invisible, escanea los píxeles y asigna objetivos a las estrellas
+        function assignButterflies() {
+            let particleIndex = PARTICLE_COUNT - 1;
+            for (let b = 0; b < NUM_BUTTERFLIES; b++) {
+                for (let p = 0; p < PARTICLES_PER_BUTTERFLY; p++) {
+                    if (particleIndex < 0) break;
+                    let particle = particles[particleIndex];
+                    particle.butterflyIndex = b;
+                    let wingSide = (Math.random() > 0.5) ? 1 : -1;
+                    let wingSize = isMobile ? 8 : 12; 
+                    particle.butterflyOffset = {
+                        x: (Math.random() * wingSize + 3) * wingSide,
+                        y: (Math.random() - 0.5) * wingSize * 2
+                    };
+                    particleIndex--;
+                }
+            }
+        }
+
+        function scatterParticles() {
+            currentState = { type: 'scatter', value: null }; 
+            particles.forEach(p => {
+                p.targetX = null;
+                p.targetY = null;
+                p.inShape = false;
+                p.color = PARTICLE_COLOR;
+                // Velocidad aleatoria para dispersión natural
+                p.vx = (Math.random() - 0.5) * 2; 
+                p.vy = (Math.random() - 0.5) * 2;
+            });
+            areButterfliesActive = false; 
+        }
+
         function formText(text) {
-            // Resetear objetivos
+            currentState = { type: 'text', value: text }; 
+            
             particles.forEach(p => {
                 p.targetX = null;
                 p.targetY = null;
@@ -170,32 +317,48 @@
                 p.color = PARTICLE_COLOR;
             });
 
-            // Usar un canvas temporal o limpiar el actual para escanear
             ctx.clearRect(0, 0, width, height);
             
-            let fontSize = Math.min(width * 0.15, 150); // Tamaño dinámico
-            ctx.font = `bold ${fontSize}px Verdana`;
+            // --- CORRECCIÓN DE CORTE DE TEXTO ---
+            // 1. Empezamos con un tamaño de fuente base
+            let fontSize = Math.min(width * 0.15, 150); 
+            ctx.font = `900 ${fontSize}px Arial, sans-serif`;
+            
+            let textMetrics = ctx.measureText(text);
+            
+            // 2. Margen de seguridad: Solo permitimos usar el 80% del ancho de la pantalla (PC o Móvil)
+            // Esto deja 10% de margen a cada lado, evitando cortes.
+            let maxSafeWidth = width * 0.8; 
+            
+            // 3. Si el texto mide más que el ancho seguro, reducimos la fuente
+            if (textMetrics.width > maxSafeWidth) {
+                let reductionFactor = maxSafeWidth / textMetrics.width;
+                fontSize = fontSize * reductionFactor;
+                // Aplicamos la nueva fuente reducida
+                ctx.font = `900 ${fontSize}px Arial, sans-serif`; 
+            }
+
             ctx.fillStyle = 'white';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(text, width / 2, height / 2);
 
-            // Obtener datos de píxeles
             const textCoordinates = ctx.getImageData(0, 0, width, height);
             const data = textCoordinates.data;
 
             let particleIndex = 0;
-            
-            // Escanear píxeles (saltando cada 5 para no saturar)
-            const step = 5; 
+            const step = isMobile ? 5 : 4; 
+            const maxTextParticles = PARTICLE_COUNT - (NUM_BUTTERFLIES * PARTICLES_PER_BUTTERFLY);
+
             for (let y = 0; y < height; y += step) {
                 for (let x = 0; x < width; x += step) {
                     const alpha = data[(y * 4 * textCoordinates.width) + (x * 4) + 3];
-                    if (alpha > 128) { // Si hay pixel visible (letra)
-                        if (particleIndex < particles.length) {
+                    if (alpha > 128) {
+                        if (particleIndex < maxTextParticles) {
                             particles[particleIndex].targetX = x;
                             particles[particleIndex].targetY = y;
                             particles[particleIndex].inShape = true;
+                            particles[particleIndex].color = ACCENT_COLOR; 
                             particleIndex++;
                         }
                     }
@@ -203,71 +366,90 @@
             }
         }
 
-        // --- SISTEMA DE CORAZÓN ---
         function formHeart() {
+            currentState = { type: 'heart', value: null }; 
+
             particles.forEach(p => {
-                p.targetX = null;
-                p.targetY = null;
-                p.inShape = false;
+                if (p.butterflyIndex === -1) {
+                    p.targetX = null;
+                    p.targetY = null;
+                    p.inShape = false;
+                    p.color = PARTICLE_COLOR;
+                }
             });
 
             let heartPoints = [];
-            // Fórmula matemática del corazón
-            // x = 16sin^3(t)
-            // y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
-            
-            let scale = Math.min(width, height) / 40;
             let centerX = width / 2;
             let centerY = height / 2;
+            // Corazón un poco más pequeño en móvil para asegurar márgenes
+            let baseScale = Math.min(width, height) / (isMobile ? 40 : 45); 
 
-            for (let t = 0; t < Math.PI * 2; t += 0.05) {
-                let x = 16 * Math.pow(Math.sin(t), 3);
-                let y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-                
-                // Invertir Y porque en Canvas Y crece hacia abajo
-                heartPoints.push({
-                    x: centerX + (x * scale),
-                    y: centerY - (y * scale)
-                });
-            }
+            const numLayers = 6;
+            
+            for (let layer = 0; layer < numLayers; layer++) {
+                let currentScale = baseScale * (1 - (layer * 0.15));
+                if (currentScale < 0) break;
 
-            // Asignar puntos del corazón a las estrellas
-            // Reutilizamos estrellas para rellenar el borde
-            let pointIndex = 0;
-            for (let i = 0; i < particles.length; i++) {
-                if (pointIndex >= heartPoints.length) pointIndex = 0;
-                
-                // Usamos solo un porcentaje de estrellas para el corazón para que se vea definido
-                if (i < 600) { 
-                    particles[i].targetX = heartPoints[pointIndex].x + (Math.random() - 0.5) * 10; // Un poco de ruido
-                    particles[i].targetY = heartPoints[pointIndex].y + (Math.random() - 0.5) * 10;
-                    particles[i].inShape = true;
-                    particles[i].color = '#ff3366'; // Rojo pasión
-                    pointIndex++;
-                } else {
-                    // El resto flota alrededor
-                     particles[i].targetX = null;
-                     particles[i].targetY = null;
+                let density = 0.04 + (layer * 0.02); 
+
+                for (let t = 0; t < Math.PI * 2; t += density) { 
+                    let x = 16 * Math.pow(Math.sin(t), 3);
+                    let y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                    
+                    heartPoints.push({
+                        x: centerX + (x * currentScale),
+                        y: centerY - (y * currentScale)
+                    });
                 }
             }
+
+            let pointIndex = 0;
+            for (let i = 0; i < particles.length; i++) {
+                if (particles[i].butterflyIndex === -1) {
+                    if (pointIndex >= heartPoints.length) pointIndex = 0;
+                    
+                    let maxHeartParticles = isMobile ? 1200 : 2000; 
+                    if (i < maxHeartParticles) { 
+                        particles[i].targetX = heartPoints[pointIndex].x + (Math.random() - 0.5) * 5;
+                        particles[i].targetY = heartPoints[pointIndex].y + (Math.random() - 0.5) * 5;
+                        particles[i].inShape = true;
+                        particles[i].color = ACCENT_COLOR;
+                        pointIndex++;
+                    }
+                }
+            }
+            areButterfliesActive = true;
         }
 
-        // --- MANEJO DEL MOUSE ---
         window.addEventListener('mousemove', (e) => {
             mouse.x = e.x;
             mouse.y = e.y;
         });
         
-        // Soporte para móviles (Touch)
         window.addEventListener('touchmove', (e) => {
             mouse.x = e.touches[0].clientX;
             mouse.y = e.touches[0].clientY;
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            mouse.x = -9999;
+            mouse.y = -9999;
         });
 
-        // --- BUCLE DE ANIMACIÓN ---
         function animate() {
-            ctx.clearRect(0, 0, width, height); // Limpiar pantalla
+            ctx.clearRect(0, 0, width, height);
             
+            if (currentState.type === 'heart') {
+                const time = Date.now() * 0.003;
+                pulseScale = 1 + 0.04 * Math.pow(Math.sin(time), 3);
+            } else {
+                pulseScale = 1;
+            }
+
+            if (areButterfliesActive) {
+                butterflyEntities.forEach(b => b.update());
+            }
+
             for (let i = 0; i < particles.length; i++) {
                 particles[i].update();
                 particles[i].draw();
@@ -275,37 +457,48 @@
             requestAnimationFrame(animate);
         }
 
-        // --- SECUENCIA DE HISTORIA ---
-        function startSequence() {
-            if (isSequenceRunning) return;
-            isSequenceRunning = true;
-            uiLayer.classList.add('hidden'); // Ocultar texto "Haz Clic"
-
-            const timeline = [
-                { text: "¡Feliz Día!", delay: 0 },
-                { text: "Mi Amor", delay: 4000 },
-                { text: "Te Amo", delay: 8000 },
-                { action: "heart", delay: 12000 }
-            ];
-
-            timeline.forEach(item => {
+        function handleClick(e) {
+            if (isHeartFormed) {
+                scatterParticles();
+                isHeartFormed = false; 
+                
                 setTimeout(() => {
-                    if (item.action === "heart") {
-                        formHeart();
-                    } else {
-                        formText(item.text);
-                    }
-                }, item.delay);
-            });
+                    formText("¡Te Amo Mucho!");
+                    areButterfliesActive = true;
+                    
+                    setTimeout(formHeart, 4000);
+                    isHeartFormed = true; 
+                }, 500);
+                return;
+            }
+
+            if (!isSequenceRunning) {
+                isSequenceRunning = true;
+                uiLayer.classList.add('hidden');
+
+                FRASES_Y_TIEMPOS.forEach(item => {
+                    let timeoutId = setTimeout(() => {
+                        if (item.action === "heart") {
+                            formHeart();
+                            isHeartFormed = true; 
+                        } else {
+                            areButterfliesActive = false; 
+                            formText(item.text);
+                        }
+                    }, item.tiempo);
+                    activeTimeouts.push(timeoutId);
+                });
+            }
         }
 
-        // --- INICIAR ---
-        initParticles();
-        animate();
+        // Orden crítico de inicialización para evitar problemas de "costado"
+        resize();         // 1. Definir tamaño
+        initParticles();  // 2. Crear estrellas en toda la pantalla
+        assignButterflies(); 
+        animate();        // 3. Arrancar bucle
 
-        // Evento de clic para iniciar
-        window.addEventListener('click', startSequence);
-        window.addEventListener('touchstart', startSequence);
+        window.addEventListener('click', handleClick);
+        window.addEventListener('touchstart', handleClick);
 
     </script>
 </body>
