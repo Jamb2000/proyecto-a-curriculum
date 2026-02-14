@@ -110,9 +110,13 @@
         let pulseScale = 1;
 
         // Configuración adaptable (Móvil vs PC)
+        // Detectamos móvil si el ancho es menor a 768px
         const isMobile = window.innerWidth < 768;
-        // Aumentamos ligeramente partículas en móvil para mejor definición de letras pequeñas
-        const PARTICLE_COUNT = isMobile ? 2200 : 3200; 
+        
+        // AJUSTE ADAPTATIVO:
+        // En móvil necesitamos más densidad (partículas por área) para que el texto pequeño se lea bien.
+        // En PC tenemos más espacio, así que usamos más partículas en total para llenar la pantalla.
+        const PARTICLE_COUNT = isMobile ? 2500 : 3500; 
         const MOUSE_RADIUS = isMobile ? 80 : 120;
         
         const PARTICLE_COLOR = 'rgba(255, 255, 255, 0.8)'; 
@@ -127,6 +131,7 @@
             width = canvas.width = window.innerWidth;
             height = canvas.height = window.innerHeight;
             
+            // Si cambia el tamaño (ej. girar el celular), redibujamos lo que esté en pantalla
             if (currentState.type === 'text') {
                 formText(currentState.value);
             } else if (currentState.type === 'heart') {
@@ -305,7 +310,7 @@
             areButterfliesActive = false; 
         }
 
-        /* --- FUNCIÓN CRÍTICA CORREGIDA PARA EL TEXTO --- */
+        /* --- FUNCIÓN ADAPTATIVA MAESTRA PARA EL TEXTO --- */
         function formText(text) {
             currentState = { type: 'text', value: text }; 
             
@@ -318,26 +323,32 @@
 
             ctx.clearRect(0, 0, width, height);
             
-            // 1. Iniciamos con un tamaño de fuente menor por seguridad (14% del ancho)
-            let baseFontSize = Math.min(width * 0.14, 140); 
+            // 1. Cálculo de tamaño de fuente inicial
+            // En móvil empezamos un poco más grande proporcionalmente para aprovechar espacio
+            let initialScale = isMobile ? 0.20 : 0.15; 
+            let baseFontSize = Math.min(width * initialScale, 180); 
             ctx.font = `900 ${baseFontSize}px Arial, sans-serif`;
             
             // 2. Medimos el ancho
             let metrics = ctx.measureText(text);
             let textWidth = metrics.width;
             
-            // 3. Espacio seguro MUCHO MÁS AGRESIVO: Solo ocupamos el 70% del ancho
-            // Esto deja un 15% de margen a cada lado, garantizando que no se corte.
-            let maxSafeWidth = width * 0.70; 
+            // 3. Espacio seguro ADAPTATIVO
+            // PC: 75% del ancho (elegante)
+            // Móvil: 92% del ancho (máxima legibilidad)
+            let safePercentage = isMobile ? 0.92 : 0.75;
+            let maxSafeWidth = width * safePercentage; 
 
-            // 4. Si se pasa, reducimos drásticamente
+            // 4. Ajuste de tamaño si se pasa del ancho seguro
             if (textWidth > maxSafeWidth) {
                 let scaleFactor = maxSafeWidth / textWidth;
                 baseFontSize = Math.floor(baseFontSize * scaleFactor);
-                // Evitamos que sea demasiado minúsculo
-                baseFontSize = Math.max(baseFontSize, 16); 
-                ctx.font = `900 ${baseFontSize}px Arial, sans-serif`;
             }
+            // Aseguramos un mínimo legible
+            baseFontSize = Math.max(baseFontSize, 20);
+            
+            // Aplicamos la fuente final calculada
+            ctx.font = `900 ${baseFontSize}px Arial, sans-serif`;
 
             ctx.fillStyle = 'white';
             ctx.textAlign = 'center';
@@ -350,12 +361,15 @@
 
             let particleIndex = 0;
             
-            // 5. Ajuste dinámico de calidad de escaneo
-            // Si la letra es pequeña, escaneamos píxel a píxel (step=2) para que se lea bien.
-            // Si es grande, saltamos de 4 en 4 para rendimiento.
-            let step = 4;
-            if (baseFontSize < 50) step = 2; 
-            else if (isMobile) step = 3;
+            // 5. Ajuste INTELIGENTE de densidad (step)
+            // Calculamos el paso según el tamaño de la letra.
+            // Letra pequeña (móvil/frase larga) = paso pequeño (alta resolución).
+            // Letra grande = paso grande (mejor rendimiento).
+            let step = Math.floor(baseFontSize / 20); 
+            
+            // Límites para el paso
+            if (step < 2) step = 2; // Mínimo absoluto para buena definición
+            if (step > 5) step = 5; // Máximo para no perder forma
 
             const maxTextParticles = PARTICLE_COUNT - (NUM_BUTTERFLIES * PARTICLES_PER_BUTTERFLY);
 
@@ -391,8 +405,9 @@
             let heartPoints = [];
             let centerX = width / 2;
             let centerY = height / 2;
-            // Corazón más pequeño en móvil para evitar que toque bordes (1/50 en vez de 1/40)
-            let baseScale = Math.min(width, height) / (isMobile ? 50 : 45); 
+            // Corazón adaptativo: más pequeño en relación a la pantalla en móvil para dejar márgenes
+            let scaleDivisor = isMobile ? 55 : 45;
+            let baseScale = Math.min(width, height) / scaleDivisor; 
 
             const numLayers = 6;
             
@@ -512,4 +527,4 @@
 
     </script>
 </body>
-</html> 
+</html>
