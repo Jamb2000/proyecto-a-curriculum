@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Para mi esposa - San Valentín</title>
+    <style>
+        /* --- ESTILOS (CSS) --- */
+        /* Esto reemplaza lo que pedías como C++, ya que CSS es el estándar para diseño web */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Evita barras de desplazamiento */
+            background-color: #000000; /* Fondo negro galáctico */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        canvas {
+            display: block; /* El lienzo ocupa todo el bloque */
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.8);
+            pointer-events: none; /* Permite que el click pase al canvas */
+            text-align: center;
+            font-size: 1.5rem;
+            opacity: 1;
+            transition: opacity 1s ease;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        .hidden {
+            opacity: 0 !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Capa de texto inicial -->
+    <div id="ui-layer">Haz Clic en la pantalla</div>
+    
+    <!-- El Lienzo donde ocurre la magia -->
+    <canvas id="galaxyCanvas"></canvas>
+
+    <script>
+        /* --- LÓGICA (JAVASCRIPT) --- */
+        
+        const canvas = document.getElementById('galaxyCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const uiLayer = document.getElementById('ui-layer');
+
+        let width, height;
+        let particles = [];
+        let mouse = { x: -9999, y: -9999 }; // Mouse fuera de pantalla inicialmente
+        let isSequenceRunning = false;
+
+        // Configuración de las estrellas
+        const PARTICLE_COUNT = 1800; // Cantidad de estrellas
+        const MOUSE_RADIUS = 100; // Radio de repulsión del mouse
+        const PARTICLE_COLOR = 'rgba(255, 255, 255, 0.9)';
+        const ACCENT_COLOR = 'rgba(255, 100, 150, 0.9)'; // Color rosado para el corazón
+
+        // Inicialización del tamaño del canvas
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Clase Partícula (Estrella)
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 1.5; // Velocidad aleatoria
+                this.vy = (Math.random() - 0.5) * 1.5;
+                this.size = Math.random() * 2 + 1;
+                this.baseX = this.x;
+                this.baseY = this.y;
+                this.targetX = null; // Destino cuando forma palabras
+                this.targetY = null;
+                this.density = (Math.random() * 30) + 1;
+                this.color = PARTICLE_COLOR;
+                this.inShape = false; // ¿Es parte de una letra/forma?
+            }
+
+            update() {
+                // Cálculo de distancia al mouse
+                let dx = mouse.x - this.x;
+                let dy = mouse.y - this.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+                let forceDirectionX = dx / distance;
+                let forceDirectionY = dy / distance;
+                
+                // Fuerza de repulsión (Mouse)
+                let maxDistance = MOUSE_RADIUS;
+                let force = (maxDistance - distance) / maxDistance;
+                let directionX = forceDirectionX * force * this.density;
+                let directionY = forceDirectionY * force * this.density;
+
+                if (distance < maxDistance) {
+                    this.x -= directionX;
+                    this.y -= directionY;
+                }
+
+                // Lógica de movimiento según estado
+                if (this.targetX !== null && this.targetY !== null) {
+                    // Modo: Formar palabra/corazón
+                    let tdx = this.targetX - this.x;
+                    let tdy = this.targetY - this.y;
+                    
+                    // Moverse suavemente al destino (Easing)
+                    this.x += tdx * 0.1; 
+                    this.y += tdy * 0.1;
+                    
+                    // Un poco de vibración para que no se vea estático
+                    if (Math.abs(tdx) < 1 && Math.abs(tdy) < 1) {
+                         this.x += (Math.random() - 0.5) * 0.5;
+                         this.y += (Math.random() - 0.5) * 0.5;
+                    }
+                } else {
+                    // Modo: Galaxia libre
+                    this.x += this.vx;
+                    this.y += this.vy;
+
+                    // Rebote en los bordes
+                    if (this.x < 0 || this.x > width) this.vx = -this.vx;
+                    if (this.y < 0 || this.y > height) this.vy = -this.vy;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.inShape ? ACCENT_COLOR : this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        // Crear partículas iniciales
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        // --- SISTEMA DE TEXTO A PUNTOS ---
+        // Dibuja texto invisible, escanea los píxeles y asigna objetivos a las estrellas
+        function formText(text) {
+            // Resetear objetivos
+            particles.forEach(p => {
+                p.targetX = null;
+                p.targetY = null;
+                p.inShape = false;
+                p.color = PARTICLE_COLOR;
+            });
+
+            // Usar un canvas temporal o limpiar el actual para escanear
+            ctx.clearRect(0, 0, width, height);
+            
+            let fontSize = Math.min(width * 0.15, 150); // Tamaño dinámico
+            ctx.font = `bold ${fontSize}px Verdana`;
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, width / 2, height / 2);
+
+            // Obtener datos de píxeles
+            const textCoordinates = ctx.getImageData(0, 0, width, height);
+            const data = textCoordinates.data;
+
+            let particleIndex = 0;
+            
+            // Escanear píxeles (saltando cada 5 para no saturar)
+            const step = 5; 
+            for (let y = 0; y < height; y += step) {
+                for (let x = 0; x < width; x += step) {
+                    const alpha = data[(y * 4 * textCoordinates.width) + (x * 4) + 3];
+                    if (alpha > 128) { // Si hay pixel visible (letra)
+                        if (particleIndex < particles.length) {
+                            particles[particleIndex].targetX = x;
+                            particles[particleIndex].targetY = y;
+                            particles[particleIndex].inShape = true;
+                            particleIndex++;
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- SISTEMA DE CORAZÓN ---
+        function formHeart() {
+            particles.forEach(p => {
+                p.targetX = null;
+                p.targetY = null;
+                p.inShape = false;
+            });
+
+            let heartPoints = [];
+            // Fórmula matemática del corazón
+            // x = 16sin^3(t)
+            // y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
+            
+            let scale = Math.min(width, height) / 40;
+            let centerX = width / 2;
+            let centerY = height / 2;
+
+            for (let t = 0; t < Math.PI * 2; t += 0.05) {
+                let x = 16 * Math.pow(Math.sin(t), 3);
+                let y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                
+                // Invertir Y porque en Canvas Y crece hacia abajo
+                heartPoints.push({
+                    x: centerX + (x * scale),
+                    y: centerY - (y * scale)
+                });
+            }
+
+            // Asignar puntos del corazón a las estrellas
+            // Reutilizamos estrellas para rellenar el borde
+            let pointIndex = 0;
+            for (let i = 0; i < particles.length; i++) {
+                if (pointIndex >= heartPoints.length) pointIndex = 0;
+                
+                // Usamos solo un porcentaje de estrellas para el corazón para que se vea definido
+                if (i < 600) { 
+                    particles[i].targetX = heartPoints[pointIndex].x + (Math.random() - 0.5) * 10; // Un poco de ruido
+                    particles[i].targetY = heartPoints[pointIndex].y + (Math.random() - 0.5) * 10;
+                    particles[i].inShape = true;
+                    particles[i].color = '#ff3366'; // Rojo pasión
+                    pointIndex++;
+                } else {
+                    // El resto flota alrededor
+                     particles[i].targetX = null;
+                     particles[i].targetY = null;
+                }
+            }
+        }
+
+        // --- MANEJO DEL MOUSE ---
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.x;
+            mouse.y = e.y;
+        });
+        
+        // Soporte para móviles (Touch)
+        window.addEventListener('touchmove', (e) => {
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+        });
+
+        // --- BUCLE DE ANIMACIÓN ---
+        function animate() {
+            ctx.clearRect(0, 0, width, height); // Limpiar pantalla
+            
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // --- SECUENCIA DE HISTORIA ---
+        function startSequence() {
+            if (isSequenceRunning) return;
+            isSequenceRunning = true;
+            uiLayer.classList.add('hidden'); // Ocultar texto "Haz Clic"
+
+            const timeline = [
+                { text: "¡Feliz Día!", delay: 0 },
+                { text: "Mi Amor", delay: 4000 },
+                { text: "Te Amo", delay: 8000 },
+                { action: "heart", delay: 12000 }
+            ];
+
+            timeline.forEach(item => {
+                setTimeout(() => {
+                    if (item.action === "heart") {
+                        formHeart();
+                    } else {
+                        formText(item.text);
+                    }
+                }, item.delay);
+            });
+        }
+
+        // --- INICIAR ---
+        initParticles();
+        animate();
+
+        // Evento de clic para iniciar
+        window.addEventListener('click', startSequence);
+        window.addEventListener('touchstart', startSequence);
+
+    </script>
+</body>
+</html>
