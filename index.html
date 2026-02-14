@@ -111,7 +111,8 @@
 
         // Configuración adaptable (Móvil vs PC)
         const isMobile = window.innerWidth < 768;
-        const PARTICLE_COUNT = isMobile ? 1800 : 3200; 
+        // Aumentamos ligeramente partículas en móvil para mejor definición de letras pequeñas
+        const PARTICLE_COUNT = isMobile ? 2200 : 3200; 
         const MOUSE_RADIUS = isMobile ? 80 : 120;
         
         const PARTICLE_COLOR = 'rgba(255, 255, 255, 0.8)'; 
@@ -133,8 +134,7 @@
             }
         }
         window.addEventListener('resize', resize);
-        resize(); // Llamada inmediata crítica
-
+        
         /* --- CLASE MARIPOSA --- */
         class ButterflyEntity {
             constructor(id) {
@@ -179,7 +179,6 @@
         class Particle {
             constructor(index) {
                 this.index = index;
-                // CORRECCIÓN: Distribución aleatoria total en la pantalla
                 this.x = Math.random() * width; 
                 this.y = Math.random() * height;
                 this.vx = (Math.random() - 0.5) * 1.5; 
@@ -300,13 +299,13 @@
                 p.targetY = null;
                 p.inShape = false;
                 p.color = PARTICLE_COLOR;
-                // Velocidad aleatoria para dispersión natural
                 p.vx = (Math.random() - 0.5) * 2; 
                 p.vy = (Math.random() - 0.5) * 2;
             });
             areButterfliesActive = false; 
         }
 
+        /* --- FUNCIÓN CRÍTICA CORREGIDA PARA EL TEXTO --- */
         function formText(text) {
             currentState = { type: 'text', value: text }; 
             
@@ -319,35 +318,45 @@
 
             ctx.clearRect(0, 0, width, height);
             
-            // --- CORRECCIÓN DE CORTE DE TEXTO ---
-            // 1. Empezamos con un tamaño de fuente base
-            let fontSize = Math.min(width * 0.15, 150); 
-            ctx.font = `900 ${fontSize}px Arial, sans-serif`;
+            // 1. Iniciamos con un tamaño de fuente menor por seguridad (14% del ancho)
+            let baseFontSize = Math.min(width * 0.14, 140); 
+            ctx.font = `900 ${baseFontSize}px Arial, sans-serif`;
             
-            let textMetrics = ctx.measureText(text);
+            // 2. Medimos el ancho
+            let metrics = ctx.measureText(text);
+            let textWidth = metrics.width;
             
-            // 2. Margen de seguridad: Solo permitimos usar el 80% del ancho de la pantalla (PC o Móvil)
-            // Esto deja 10% de margen a cada lado, evitando cortes.
-            let maxSafeWidth = width * 0.8; 
-            
-            // 3. Si el texto mide más que el ancho seguro, reducimos la fuente
-            if (textMetrics.width > maxSafeWidth) {
-                let reductionFactor = maxSafeWidth / textMetrics.width;
-                fontSize = fontSize * reductionFactor;
-                // Aplicamos la nueva fuente reducida
-                ctx.font = `900 ${fontSize}px Arial, sans-serif`; 
+            // 3. Espacio seguro MUCHO MÁS AGRESIVO: Solo ocupamos el 70% del ancho
+            // Esto deja un 15% de margen a cada lado, garantizando que no se corte.
+            let maxSafeWidth = width * 0.70; 
+
+            // 4. Si se pasa, reducimos drásticamente
+            if (textWidth > maxSafeWidth) {
+                let scaleFactor = maxSafeWidth / textWidth;
+                baseFontSize = Math.floor(baseFontSize * scaleFactor);
+                // Evitamos que sea demasiado minúsculo
+                baseFontSize = Math.max(baseFontSize, 16); 
+                ctx.font = `900 ${baseFontSize}px Arial, sans-serif`;
             }
 
             ctx.fillStyle = 'white';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
+            
             ctx.fillText(text, width / 2, height / 2);
 
             const textCoordinates = ctx.getImageData(0, 0, width, height);
             const data = textCoordinates.data;
 
             let particleIndex = 0;
-            const step = isMobile ? 5 : 4; 
+            
+            // 5. Ajuste dinámico de calidad de escaneo
+            // Si la letra es pequeña, escaneamos píxel a píxel (step=2) para que se lea bien.
+            // Si es grande, saltamos de 4 en 4 para rendimiento.
+            let step = 4;
+            if (baseFontSize < 50) step = 2; 
+            else if (isMobile) step = 3;
+
             const maxTextParticles = PARTICLE_COUNT - (NUM_BUTTERFLIES * PARTICLES_PER_BUTTERFLY);
 
             for (let y = 0; y < height; y += step) {
@@ -364,6 +373,7 @@
                     }
                 }
             }
+            ctx.clearRect(0, 0, width, height);
         }
 
         function formHeart() {
@@ -381,8 +391,8 @@
             let heartPoints = [];
             let centerX = width / 2;
             let centerY = height / 2;
-            // Corazón un poco más pequeño en móvil para asegurar márgenes
-            let baseScale = Math.min(width, height) / (isMobile ? 40 : 45); 
+            // Corazón más pequeño en móvil para evitar que toque bordes (1/50 en vez de 1/40)
+            let baseScale = Math.min(width, height) / (isMobile ? 50 : 45); 
 
             const numLayers = 6;
             
@@ -464,7 +474,7 @@
                 
                 setTimeout(() => {
                     formText("¡Te Amo Mucho!");
-                    areButterfliesActive = true;
+                    areButterfliesActive = true; 
                     
                     setTimeout(formHeart, 4000);
                     isHeartFormed = true; 
@@ -491,11 +501,11 @@
             }
         }
 
-        // Orden crítico de inicialización para evitar problemas de "costado"
-        resize();         // 1. Definir tamaño
-        initParticles();  // 2. Crear estrellas en toda la pantalla
+        // Orden crítico de inicialización
+        resize();         
+        initParticles();  
         assignButterflies(); 
-        animate();        // 3. Arrancar bucle
+        animate();        
 
         window.addEventListener('click', handleClick);
         window.addEventListener('touchstart', handleClick);
